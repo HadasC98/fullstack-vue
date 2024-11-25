@@ -228,3 +228,102 @@ export default {
   }
 };
 </script>
+
+
+<style scoped>
+#app {
+  font-family: Avenir, Helvetica, Arial, sans-serif;
+  text-align: center;
+}
+
+.product-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.product {
+  border: 1px solid #ccc;
+  padding: 10px;
+  margin: 10px;
+  width: 300px;
+  text-align: center;
+}
+
+.product-image {
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+}
+
+.low-stock {
+  color: red;
+  font-weight: bold;
+}
+
+.cart-buttons {
+  display: flex;
+  justify-content: space-between;
+}
+
+button {
+  background-color: #4CAF50;
+  color: white;
+  padding: 10px 15px;
+  border: none;
+  cursor: pointer;
+}
+
+button:disabled {
+  background-color: #ddd;
+}
+
+.checkout-btn {
+  margin-top: 20px;
+}
+
+.checkout-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.cart-item {
+  margin-bottom: 20px;
+}
+
+.cart-image {
+  width: 80px;
+  height: 80px;
+}
+
+.finalize-btn, .back-btn {
+  margin-top: 20px;
+}
+
+.user-form-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.user-form-container {
+  background: white;
+  padding: 30px;
+  border-radius: 8px;
+  width: 300px;
+}
+
+input[type="text"], input[type="email"], input[type="number"] {
+  padding: 10px;
+  margin: 10px;
+  width: 100%;
+  border: 1px solid #ccc;
+}
+</style>
