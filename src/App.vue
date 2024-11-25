@@ -112,7 +112,7 @@ export default {
   methods: {
     async fetchProducts() {
       try {
-        const response = await fetch('https://fullstack-express-9dbh.onrender.com/api/lessons');
+        const response = await fetch('http://localhost:5000/api/lessons');
         const products = await response.json();
         this.products = products;
       } catch (error) {
@@ -140,7 +140,7 @@ export default {
         product.stock += quantity;
 
         try {
-          await fetch('https://fullstack-express-9dbh.onrender.com/api/cart/remove', {
+          await fetch('http://localhost:5000/api/cart/remove', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ lessonId: product._id, quantity })
@@ -172,7 +172,7 @@ export default {
           totalPrice: this.totalPrice
         };
 
-        const response = await fetch('https://fullstack-express-9dbh.onrender.com/api/orders', {
+        const response = await fetch('http://localhost:5000/api/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(order)
@@ -194,7 +194,7 @@ export default {
     async updateStock() {
       for (const item of this.cart) {
         try {
-          await fetch(`https://fullstack-express-9dbh.onrender.com/api/lessons/${item._id}/update-stock`, {
+          await fetch(`http://localhost:5000/api/lessons/${item._id}/update-stock`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ quantity: item.quantity })
@@ -205,7 +205,6 @@ export default {
       }
       await this.fetchProducts();
     },
-    // Method to check if product is in cart
     isInCart(product) {
       return this.cart.some(item => item._id === product._id);
     }
@@ -218,12 +217,28 @@ export default {
       return this.cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
     },
     sortedAndFilteredProducts() {
-      const filtered = this.products.filter(p => p.subject.toLowerCase().includes(this.searchQuery.toLowerCase()));
-      return this.sortOption === 'name'
-        ? filtered.sort((a, b) => a.subject.localeCompare(b.subject))
-        : this.sortOption === 'priceAsc'
-        ? filtered.sort((a, b) => a.price - b.price)
-        : filtered;
+      let filtered = this.products.filter(p => p.subject.toLowerCase().includes(this.searchQuery.toLowerCase()));
+      
+      if (this.sortOption) {
+        switch (this.sortOption) {
+          case 'subject':
+            filtered = filtered.sort((a, b) => a.subject.localeCompare(b.subject));
+            break;
+          case 'location':
+            filtered = filtered.sort((a, b) => a.location.localeCompare(b.location));
+            break;
+          case 'priceAsc':
+            filtered = filtered.sort((a, b) => a.price - b.price);
+            break;
+          case 'stockAsc':
+            filtered = filtered.sort((a, b) => a.stock - b.stock);
+            break;
+          default:
+            break;
+        }
+      }
+      
+      return filtered;
     }
   }
 };
