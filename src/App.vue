@@ -17,8 +17,10 @@
       />
       <select v-model="sortOption" class="sort-select">
         <option disabled value="">Sort by</option>
-        <option value="name">Name (A-Z)</option>
+        <option value="subject">Subject (A-Z)</option>
+        <option value="location">Location (A-Z)</option>
         <option value="priceAsc">Price (Low to High)</option>
+        <option value="stockAsc">Availability (Low to High)</option>
       </select>
     </div>
 
@@ -35,7 +37,6 @@
           <button :disabled="product.stock === 0" @click="addToCart(product)">
             Add to Cart
           </button>
-          <!-- Disable Remove button until the product is added to the cart -->
           <button :disabled="!isInCart(product)" @click="removeFromCart(product, 1)">
             Remove
           </button>
@@ -112,7 +113,7 @@ export default {
   methods: {
     async fetchProducts() {
       try {
-        const response = await fetch('http://localhost:5000/api/lessons');
+        const response = await fetch('https://fullstack-express-9dbh.onrender.com/api/lessons');
         const products = await response.json();
         this.products = products;
       } catch (error) {
@@ -140,7 +141,7 @@ export default {
         product.stock += quantity;
 
         try {
-          await fetch('http://localhost:5000/api/cart/remove', {
+          await fetch('https://fullstack-express-9dbh.onrender.com/api/cart/remove', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ lessonId: product._id, quantity })
@@ -172,7 +173,7 @@ export default {
           totalPrice: this.totalPrice
         };
 
-        const response = await fetch('http://localhost:5000/api/orders', {
+        const response = await fetch('https://fullstack-express-9dbh.onrender.com/api/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(order)
@@ -194,7 +195,7 @@ export default {
     async updateStock() {
       for (const item of this.cart) {
         try {
-          await fetch(`http://localhost:5000/api/lessons/${item._id}/update-stock`, {
+          await fetch(`https://fullstack-express-9dbh.onrender.com/api/lessons/${item._id}/update-stock`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ quantity: item.quantity })
@@ -205,6 +206,7 @@ export default {
       }
       await this.fetchProducts();
     },
+    // Method to check if product is in cart
     isInCart(product) {
       return this.cart.some(item => item._id === product._id);
     }
@@ -218,24 +220,15 @@ export default {
     },
     sortedAndFilteredProducts() {
       let filtered = this.products.filter(p => p.subject.toLowerCase().includes(this.searchQuery.toLowerCase()));
-      
-      if (this.sortOption) {
-        switch (this.sortOption) {
-          case 'subject':
-            filtered = filtered.sort((a, b) => a.subject.localeCompare(b.subject));
-            break;
-          case 'location':
-            filtered = filtered.sort((a, b) => a.location.localeCompare(b.location));
-            break;
-          case 'priceAsc':
-            filtered = filtered.sort((a, b) => a.price - b.price);
-            break;
-          case 'stockAsc':
-            filtered = filtered.sort((a, b) => a.stock - b.stock);
-            break;
-          default:
-            break;
-        }
+
+      if (this.sortOption === 'subject') {
+        filtered = filtered.sort((a, b) => a.subject.localeCompare(b.subject));
+      } else if (this.sortOption === 'location') {
+        filtered = filtered.sort((a, b) => a.location.localeCompare(b.location));
+      } else if (this.sortOption === 'priceAsc') {
+        filtered = filtered.sort((a, b) => a.price - b.price);
+      } else if (this.sortOption === 'stockAsc') {
+        filtered = filtered.sort((a, b) => a.stock - b.stock);
       }
       
       return filtered;
@@ -245,6 +238,7 @@ export default {
 </script>
 
 <style scoped>
+/* Styles for the app */
 #app {
   font-family: Avenir, Helvetica, Arial, sans-serif;
   text-align: center;
