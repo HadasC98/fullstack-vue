@@ -112,7 +112,7 @@ export default {
   methods: {
     async fetchProducts() {
       try {
-        const response = await fetch('http://localhost:5000/api/lessons');
+        const response = await fetch('https://fullstack-express-9dbh.onrender.com/api/lessons');
         const products = await response.json();
         this.products = products;
       } catch (error) {
@@ -140,7 +140,7 @@ export default {
         product.stock += quantity;
 
         try {
-          await fetch('http://localhost:5000/api/cart/remove', {
+          await fetch('https://fullstack-express-9dbh.onrender.com/api/cart/remove', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ lessonId: product._id, quantity })
@@ -172,7 +172,7 @@ export default {
           totalPrice: this.totalPrice
         };
 
-        const response = await fetch('http://localhost:5000/api/orders', {
+        const response = await fetch('https://fullstack-express-9dbh.onrender.com/api/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(order)
@@ -194,7 +194,7 @@ export default {
     async updateStock() {
       for (const item of this.cart) {
         try {
-          await fetch(`http://localhost:5000/api/lessons/${item._id}/update-stock`, {
+          await fetch(`https://fullstack-express-9dbh.onrender.com/api/lessons/${item._id}/update-stock`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ quantity: item.quantity })
@@ -228,7 +228,6 @@ export default {
   }
 };
 </script>
-
 
 <style scoped>
 #app {
