@@ -114,16 +114,27 @@ export default {
   methods: {
     async fetchProducts() {
   try {
+    // Fetch lessons from the API
     const response = await fetch('https://fullstack-express-9dbh.onrender.com/api/lessons');
+    
+    // Check if response is OK
     if (!response.ok) {
-      throw new Error('Failed to fetch lessons');
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
+
+    // Parse JSON
     const data = await response.json();
-    console.log('Lessons fetched:', data); // Log data to check
+
+    // Check if data is valid
+    if (!Array.isArray(data)) {
+      throw new Error('Invalid response format: expected an array');
+    }
+
+    console.log('Lessons fetched successfully:', data);
     this.products = data;
   } catch (error) {
-    console.error('Error fetching products:', error);
-    alert('Error fetching products');
+    console.error('Error fetching lessons:', error.message);
+    alert(`Error fetching lessons: ${error.message}`);
   }
 },
     addToCart(product) {
@@ -174,45 +185,69 @@ export default {
     closeUserFormPopup() {
       this.showUserForm = false;
     },
-    async finalizeOrder() {
-      const lessonIDs = this.cart.map(item => item._id);
-      const numberOfSpaces = this.cart.map(item => item.quantity);
-      const order = {
-        name: this.user.name,
-        phoneNumber: this.user.phone,
-        email: this.user.email,
-        address: this.user.address,
-        lessonIDs,
-        numberOfSpaces
-      };
+    methods: {
+  async finalizeOrder() {
+    const lessonIDs = this.cart.map(item => item._id);
+    const numberOfSpaces = this.cart.map(item => item.quantity);
+    const order = {
+      name: this.user.name,
+      phoneNumber: this.user.phone,
+      email: this.user.email,
+      address: this.user.address,
+      lessonIDs,
+      numberOfSpaces
+    };
 
-      try {
-        const response = await fetch('https://fullstack-express-9dbh.onrender.com/api/orders', {
+    try {
+      // Save order details to the orders collection
+      const orderResponse = await fetch('https://fullstack-express-9dbh.onrender.com/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(order)
+      });
+
+      if (orderResponse.ok) {
+        // Save user details to the users collection
+        const userResponse = await fetch('https://fullstack-express-9dbh.onrender.com/api/users', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(order)
+          body: JSON.stringify({ name: this.user.name, phoneNumber: this.user.phone })
         });
 
-        if (response.ok) {
-          // Save the user to the users collection
-          await fetch('https://fullstack-express-9dbh.onrender.com/api/users', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: this.user.name, phoneNumber: this.user.phone })
-          });
-          
-          // Clear cart and refresh products
-          this.cart = [];
-          this.user = { name: '', phone: '', email: '', address: '' };
-          this.fetchProducts();
-          alert('Order placed successfully!');
-        } else {
-          alert('Failed to place the order');
+        if (!userResponse.ok) {
+          console.error('Failed to save user details.');
+          alert('Failed to save user details.');
+          return;
         }
-      } catch (error) {
-        console.error('Error finalizing order:', error);
+
+        // Update stock for each lesson in MongoDB
+        const stockUpdates = this.cart.map(item => 
+          fetch(`https://fullstack-express-9dbh.onrender.com/api/lessons/${item._id}/update-stock`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ quantity: -item.quantity })
+          })
+        );
+
+        await Promise.all(stockUpdates);
+
+        // Clear cart, reset user details, and fetch updated products
+        this.cart = [];
+        this.user = { name: '', phone: '', email: '', address: '' };
+        await this.fetchProducts();
+
+        // Display success message and redirect to product page
+        alert('Purchase completed successfully!');
+        this.goBackToProducts();
+      } else {
+        alert('Failed to place the order.');
       }
-    },
+    } catch (error) {
+      console.error('Error finalizing order:', error);
+      alert('An error occurred while completing your purchase.');
+    }
+  },
+},
     isInCart(product) {
       return this.cart.some(item => item._id === product._id);
     },
@@ -350,5 +385,7 @@ input[type="text"], input[type="email"], input[type="number"] {
   border: 1px solid #ccc;
 }
 </style>
+
+
 
 
