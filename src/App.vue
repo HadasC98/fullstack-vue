@@ -29,27 +29,26 @@
     <div v-else-if="products.length === 0" class="no-products">
       <p>No lessons available at the moment.</p>
     </div>
-    <div v-if="showProductList && products.length > 0" class="product-list">
-  <h2>Products</h2>
-  <div v-for="product in sortedAndFilteredProducts" :key="product._id" class="product">
-    <h3>{{ product.subject }}</h3>
-    <img :src="product.imagePath" :alt="product.imageAlt" class="product-image" />
-    <p>Location: {{ product.location }}</p>
-    <p>Price: ${{ product.price }}</p>
-    <p>Available: {{ product.stock }} 
-      <span v-if="product.stock <= 2" class="low-stock">Low stock!</span>
-    </p>
-    <p>Spaces: {{ product.space }}</p> <!-- Added Spaces Field -->
-    <div class="cart-buttons">
-      <button :disabled="product.stock === 0" @click="addToCart(product)">
-        Add to Cart
-      </button>
-      <button :disabled="!isInCart(product)" @click="removeFromCart(product)">
-        Remove from Cart
-      </button>
-    </div>
-  </div>
 
+    <div v-if="showProductList && products.length > 0" class="product-list">
+      <h2>Products</h2>
+      <div v-for="product in sortedAndFilteredProducts" :key="product._id" class="product">
+        <h3>{{ product.subject }}</h3>
+        <img :src="product.imagePath" :alt="product.imageAlt" class="product-image" />
+        <p>Location: {{ product.location }}</p>
+        <p>Price: ${{ product.price }}</p>
+        <p>Available: {{ product.stock }} 
+          <span v-if="product.stock <= 2" class="low-stock">Low stock!</span>
+        </p>
+        <div class="cart-buttons">
+          <button :disabled="product.stock === 0" @click="addToCart(product)">
+            Add to Cart
+          </button>
+          <button :disabled="!isInCart(product)" @click="removeFromCart(product)">
+            Remove from Cart
+          </button>
+        </div>
+      </div>
 
       <button @click="goToCheckout" :disabled="cartItemCount === 0" class="checkout-btn">
         Go to Checkout
@@ -114,23 +113,23 @@ export default {
     };
   },
   mounted() {
-    this.fetchProducts();
+    this.fetchProducts(); // Fetch lessons on component mount
   },
   methods: {
     async fetchProducts() {
-  this.isLoading = true;
-  try {
-    const response = await fetch('https://fullstack-express-9dbh.onrender.com/api/lessons');
-    if (!response.ok) throw new Error(`Error ${response.status}: Unable to fetch products.`);
-    const data = await response.json();
-    this.products = Array.isArray(data) ? data : [];
-  } catch (error) {
-    console.error('Error fetching products:', error);
-    alert('Failed to load products. Please try again.');
-  } finally {
-    this.isLoading = false;
-  }
-},
+      this.isLoading = true;
+      try {
+        const response = await fetch('https://fullstack-express-9dbh.onrender.com/api/lessons');
+        if (!response.ok) throw new Error(`Error ${response.status}: Unable to fetch products.`);
+        const data = await response.json();
+        this.products = Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error('Error fetching products:', error);
+        alert('Failed to load products. Please try again.');
+      } finally {
+        this.isLoading = false;
+      }
+    },
     addToCart(product) {
       const existing = this.cart.find(item => item._id === product._id);
       if (existing) existing.quantity++;
@@ -161,107 +160,89 @@ export default {
       this.showUserForm = false;
     },
     async finalizeOrder() {
-  const order = {
-    name: this.user.name,
-    phoneNumber: this.user.phone,
-    email: this.user.email,
-    address: this.user.address,
-    lessonIDs: this.cart.map(item => item._id),
-    numberOfSpaces: this.cart.map(item => item.quantity)
-  };
+      const order = {
+        name: this.user.name,
+        phoneNumber: this.user.phone,
+        email: this.user.email,
+        address: this.user.address,
+        lessonIDs: this.cart.map(item => item._id),
+        numberOfSpaces: this.cart.map(item => item.quantity)
+      };
 
-  try {
-    // Step 1: Submit user details
-    console.log('Submitting user details:', this.user);
+      try {
+        // Submit user details to users collection
+        const userResponse = await fetch('https://fullstack-express-9dbh.onrender.com/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.user)
+        });
 
-    const userResponse = await fetch('https://fullstack-express-9dbh.onrender.com/api/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(this.user)
-    });
+        if (!userResponse.ok) {
+          const errorText = await userResponse.text();
+          throw new Error(`Failed to submit user details. Response: ${errorText}`);
+        }
 
-    if (!userResponse.ok) {
-      const errorText = await userResponse.text();
-      throw new Error(`Failed to submit user details. Response: ${errorText}`);
-    }
+        // Proceed with order submission if user creation is successful
+        const orderResponse = await fetch('https://fullstack-express-9dbh.onrender.com/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(order)
+        });
 
-    console.log('User details submitted successfully.');
+        if (!orderResponse.ok) {
+          throw new Error('Failed to submit order.');
+        }
 
-    // Step 2: Submit order details
-    console.log('Submitting order details:', order);
+        // Handle stock update
+        await this.updateStock();
 
-    const orderResponse = await fetch('https://fullstack-express-9dbh.onrender.com/api/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(order)
-    });
+        // Clear cart and reset user data
+        this.cart = [];
+        this.user = { name: '', phone: '', email: '', address: '' };
+        alert('Order placed successfully!');
 
-    if (!orderResponse.ok) {
-      const errorText = await orderResponse.text();
-      throw new Error(`Failed to submit order. Response: ${errorText}`);
-    }
-
-    console.log('Order details submitted successfully.');
-
-    // Step 3: Update stock
-    console.log('Updating stock for lessons...');
-    const stockUpdatePromises = this.cart.map(async (item) => {
-      const updatedStock = { stock: item.stock - item.quantity };
-      const stockResponse = await fetch(`https://fullstack-express-9dbh.onrender.com/api/lessons/${item._id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedStock)
+        // Go back to products view
+        this.goBackToProducts();
+      } catch (error) {
+        console.error('Error finalizing order:', error);
+        alert(`Failed to finalize order: ${error.message}`);
+      }
+    },
+    async updateStock() {
+      const stockUpdatePromises = this.cart.map(async (item) => {
+        const updatedProduct = { ...item, stock: item.stock - item.quantity };
+        const productResponse = await fetch(`https://fullstack-express-9dbh.onrender.com/api/lessons/${item._id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedProduct)
+        });
+        if (!productResponse.ok) {
+          throw new Error(`Failed to update stock for product ${item.subject}`);
+        }
       });
 
-      if (!stockResponse.ok) {
-        const errorText = await stockResponse.text();
-        throw new Error(`Failed to update stock for product ${item.subject}. Response: ${errorText}`);
-      }
-    });
-
-    await Promise.all(stockUpdatePromises);
-
-    console.log('Stock updated successfully.');
-
-    // Reset cart and notify user
-    this.cart = [];
-    this.user = { name: '', phone: '', email: '', address: '' };
-    alert('Order placed successfully!');
-    this.goBackToProducts();
-  } catch (error) {
-    console.error('Error finalizing order:', error);
-    alert(`Failed to finalize order: ${error.message}`);
-  }
-},
+      await Promise.all(stockUpdatePromises);
+    },
     isInCart(product) {
       return this.cart.some(item => item._id === product._id);
     },
     isFormValid() {
-      const nameRegex = /^[A-Za-z\s]+$/;
-      const phoneRegex = /^\d{10}$/;
-      return (
-        nameRegex.test(this.user.name) &&
-        phoneRegex.test(this.user.phone) &&
-        this.user.email.includes('@') &&
-        this.user.address.length > 0
-      );
-    },
+      const nameRegex = /^[A-Za-z\s'-]+$/;
+      const phoneRegex = /^[+]?[\d\s()-]+$/;
+      return nameRegex.test(this.user.name) && phoneRegex.test(this.user.phone);
+    }
   },
   computed: {
-    totalPrice() {
-      return this.cart.reduce((total, item) => total + item.price * item.quantity, 0);
-    },
     cartItemCount() {
-      return this.cart.reduce((count, item) => count + item.quantity, 0);
+      return this.cart.reduce((sum, item) => sum + item.quantity, 0);
+    },
+    totalPrice() {
+      return this.cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
     },
     sortedAndFilteredProducts() {
-      let filtered = this.products.filter(product => {
-        return (
-          product.subject.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-          product.location.toLowerCase().includes(this.searchQuery.toLowerCase())
-        );
-      });
-
+      let filtered = this.products.filter(product =>
+        product.subject.toLowerCase().includes(this.searchQuery.toLowerCase())
+      );
       if (this.sortOption === 'subject') {
         filtered.sort((a, b) => a.subject.localeCompare(b.subject));
       } else if (this.sortOption === 'location') {
@@ -271,37 +252,93 @@ export default {
       } else if (this.sortOption === 'stockAsc') {
         filtered.sort((a, b) => a.stock - b.stock);
       }
-
       return filtered;
-    },
-  },
+    }
+  }
 };
 </script>
 
 <style scoped>
+/* General Styling */
 #app {
   font-family: Avenir, Helvetica, Arial, sans-serif;
   text-align: center;
+  background-color: #f9f9f9;
+  color: #333;
+  margin: 0;
+  padding: 20px;
 }
 
+/* Header */
+header {
+  background-color: #4CAF50;
+  color: white;
+  padding: 15px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+header h1 {
+  font-size: 1.8rem;
+}
+
+.cart {
+  font-size: 1rem;
+}
+
+/* Controls */
+.controls {
+  display: flex;
+  justify-content: center;
+  margin: 20px 0;
+}
+
+.search-bar {
+  padding: 10px;
+  margin-right: 10px;
+  width: 250px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.sort-select {
+  padding: 10px;
+  width: 200px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+/* Product List */
 .product-list {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
+  gap: 20px;
 }
 
 .product {
-  border: 1px solid #ccc;
-  padding: 10px;
-  margin: 10px;
-  width: 300px;
+  background-color: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  padding: 15px;
+  width: 280px;
   text-align: center;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.product:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
 
 .product-image {
-  width: 100px;
-  height: 100px;
+  width: 100%;
+  height: 150px;
   object-fit: cover;
+  border-radius: 4px;
+  margin-bottom: 10px;
 }
 
 .low-stock {
@@ -312,6 +349,7 @@ export default {
 .cart-buttons {
   display: flex;
   justify-content: space-between;
+  margin-top: 10px;
 }
 
 button {
@@ -319,17 +357,27 @@ button {
   color: white;
   padding: 10px 15px;
   border: none;
+  border-radius: 4px;
   cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+button:hover:not(:disabled) {
+  background-color: #45a049;
 }
 
 button:disabled {
   background-color: #ddd;
+  cursor: not-allowed;
 }
 
 .checkout-btn {
   margin-top: 20px;
+  padding: 10px 20px;
+  font-size: 1rem;
 }
 
+/* Cart in Checkout (Horizontal Layout) */
 .checkout-area {
   display: flex;
   flex-direction: column;
@@ -337,18 +385,47 @@ button:disabled {
 }
 
 .cart-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  padding: 15px;
   margin-bottom: 20px;
+  width: 90%;
+  max-width: 800px;
 }
 
 .cart-image {
   width: 80px;
   height: 80px;
+  object-fit: cover;
+  border-radius: 4px;
+  margin-right: 15px;
+}
+
+.cart-item-details {
+  flex-grow: 1;
+  text-align: left;
+}
+
+.cart-item-details p {
+  margin: 5px 0;
+}
+
+.cart-buttons {
+  margin-left: 10px;
 }
 
 .finalize-btn, .back-btn {
   margin-top: 20px;
+  padding: 10px 20px;
+  font-size: 1rem;
 }
 
+/* User Form */
 .user-form-overlay {
   position: fixed;
   top: 0;
@@ -366,12 +443,34 @@ button:disabled {
   padding: 30px;
   border-radius: 8px;
   width: 300px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  text-align: left;
 }
 
 input[type="text"], input[type="email"], input[type="number"] {
   padding: 10px;
-  margin: 10px;
+  margin: 10px 0;
   width: 100%;
   border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+button[type="submit"] {
+  width: 100%;
+  font-size: 1rem;
+  background-color: #4CAF50;
+}
+
+button[type="submit"]:disabled {
+  background-color: #ddd;
+}
+
+/* Loading and Empty States */
+.loading, .no-products {
+  text-align: center;
+  color: #555;
+  font-size: 1.2rem;
+  margin-top: 30px;
 }
 </style>
