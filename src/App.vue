@@ -239,7 +239,6 @@ export default {
 </script>
 
 <style scoped>
-/* Styles for the app */
 #app {
   font-family: Avenir, Helvetica, Arial, sans-serif;
   text-align: center;
