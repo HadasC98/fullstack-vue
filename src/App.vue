@@ -160,59 +160,53 @@ export default {
       this.showUserForm = false;
     },
     async finalizeOrder() {
-  const order = {
+  // Validate the form before proceeding
+  if (!this.isFormValid()) {
+    alert("Please ensure your name and phone number are valid.");
+    return;
+  }
+
+  // Prepare the order data
+  const orderData = {
     name: this.user.name,
     phoneNumber: this.user.phone,
     email: this.user.email,
     address: this.user.address,
-    lessonIDs: this.cart.map(item => item._id),
-    numberOfSpaces: this.cart.map(item => item.quantity)
+    lessonIDs: this.cart.map(item => item._id), // Array of lesson IDs
+    numberOfSpaces: this.cart.map(item => item.quantity) // Array of quantities for each lesson
   };
 
   try {
-    // Step 1: Submit user details to the 'users' collection (POST request)
-    const userResponse = await fetch('https://fullstack-express-9dbh.onrender.com/api/users', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json' 
-      },
-      body: JSON.stringify(this.user) // Send the user object as JSON
-    });
-
-    // Step 2: Handle response for user creation
-    if (!userResponse.ok) {
-      const errorText = await userResponse.text();
-      throw new Error(`Failed to submit user details. Response: ${errorText}`);
-    }
-
-    // Step 3: Proceed with order submission if user creation is successful
+    // Step 1: Submit the order data to the backend via a POST request
     const orderResponse = await fetch('https://fullstack-express-9dbh.onrender.com/api/orders', {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json' 
+      headers: {
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(order) // Send the order object as JSON
+      body: JSON.stringify(orderData),
     });
 
-    // Step 4: Handle response for order creation
-    if (!orderResponse.ok) {
-      const errorText = await orderResponse.text();
-      throw new Error(`Failed to submit order. Response: ${errorText}`);
+    const orderResult = await orderResponse.json();
+
+    // Check if order submission was successful
+    if (orderResult.success) {
+      alert(`Order placed successfully! Order ID: ${orderResult.orderId}`);
+
+      // Step 2: Update the stock of lessons after order submission
+      await this.updateStock();
+
+      // Step 3: Clear the cart and reset user data
+      this.cart = [];
+      this.user = { name: '', phone: '', email: '', address: '' };
+
+      // Step 4: Go back to the product list after placing the order
+      this.goBackToProducts();
+    } else {
+      alert(`Failed to place order: ${orderResult.message}`);
     }
-
-    // Step 5: Update stock after successful order submission
-    await this.updateStock();
-
-    // Step 6: Clear cart and reset user data after successful order
-    this.cart = [];
-    this.user = { name: '', phone: '', email: '', address: '' };
-    alert('Order placed successfully!');
-
-    // Step 7: Go back to the products view
-    this.goBackToProducts();
   } catch (error) {
-    console.error('Error finalizing order:', error);
-    alert(`Failed to finalize order: ${error.message}`);
+    console.error("Error placing the order:", error);
+    alert("There was an error placing the order. Please try again.");
   }
 },
     async updateStock() {
