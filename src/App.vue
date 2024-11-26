@@ -112,14 +112,13 @@ export default {
   },
   methods: {
     async fetchProducts() {
-      try {
-        const response = await fetch('https://fullstack-express-9dbh.onrender.com/api/lessons');
-        const products = await response.json();
-        this.products = products;
-      } catch (error) {
-        console.error('Error fetching products:', error);
-      }
-    },
+  try {
+    const response = await fetch('https://fullstack-express-9dbh.onrender.com/api/lessons');
+    this.products = await response.json();
+  } catch (error) {
+    console.error('Error fetching products:', error);
+  }
+  },
     addToCart(product) {
       const existing = this.cart.find(item => item._id === product._id);
       if (existing) {
@@ -166,32 +165,34 @@ export default {
       this.showUserForm = false; // Close the user form pop-up and go back to the cart
     },
     async finalizeOrder() {
-      try {
-        const order = {
-          user: { ...this.user },
-          cart: this.cart,
-          totalPrice: this.totalPrice
-        };
+  try {
+    const lessonIDs = this.cart.map(item => item._id);
+    const numberOfSpaces = this.cart.map(item => item.quantity);
+    const order = {
+      name: this.user.name,
+      phoneNumber: this.user.phoneNumber,
+      lessonIDs,
+      numberOfSpaces
+    };
 
-        const response = await fetch('https://fullstack-express-9dbh.onrender.com/api/orders', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(order)
-        });
+    const response = await fetch('https://fullstack-express-9dbh.onrender.com/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(order)
+    });
 
-        if (response.ok) {
-          await this.updateStock();
-          this.cart = [];
-          this.user = { name: '', email: '', address: '' };
-          this.showUserForm = false;
-          this.showCheckoutPopup = false;
-          this.showProductList = true;
-          alert('Order placed successfully!');
-        }
-      } catch (error) {
-        console.error('Error finalizing order:', error);
-      }
-    },
+    if (response.ok) {
+      this.cart = [];
+      this.user = { name: '', phoneNumber: '' };
+      this.fetchProducts();
+      alert('Order placed successfully!');
+    } else {
+      alert('Failed to place the order');
+    }
+  } catch (error) {
+    console.error('Error finalizing order:', error);
+  }
+},
     async updateStock() {
       for (const item of this.cart) {
         try {
@@ -335,3 +336,5 @@ input[type="text"], input[type="email"], input[type="number"] {
   border: 1px solid #ccc;
 }
 </style>
+
+
