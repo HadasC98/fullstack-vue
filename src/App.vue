@@ -1,124 +1,35 @@
-<template>
-  <div id="app">
-    <header>
-      <h1>Lessons Shop</h1>
-      <div class="cart">
-        <span>🛒 Cart: {{ cartItemCount }} items</span>
-      </div>
-    </header>
-
-    <!-- Search bar and sort options -->
-    <div class="controls">
-      <input 
-        type="text" 
-        v-model="searchQuery" 
-        placeholder="Search lessons..." 
-        class="search-bar"
-      />
-      <select v-model="sortOption" class="sort-select">
-        <option disabled value="">Sort by</option>
-        <option value="subject">Subject (A-Z)</option>
-        <option value="location">Location (A-Z)</option>
-        <option value="priceAsc">Price (Low to High)</option>
-        <option value="stockAsc">Availability (Low to High)</option>
-      </select>
-    </div>
-
-    <!-- Product List -->
-    <div v-if="showProductList" class="product-list">
-      <h2>Products</h2>
-      <div v-for="product in sortedAndFilteredProducts" :key="product._id" class="product">
-        <h3>{{ product.subject }}</h3>
-        <img :src="product.imagePath" :alt="product.imageAlt" class="product-image" />
-        <p>Location: {{ product.location }}</p>
-        <p>Price: ${{ product.price }}</p>
-        <p>Available: {{ product.stock }} <span v-if="product.stock <= 2" class="low-stock">Low stock!</span></p>
-        <div class="cart-buttons">
-          <button :disabled="product.stock === 0" @click="addToCart(product)">
-            Add to Cart
-          </button>
-          <button :disabled="!isInCart(product)" @click="removeFromCart(product, 1)">
-            Remove
-          </button>
-        </div>
-      </div>
-
-      <button @click="goToCheckout" :disabled="cartItemCount === 0" class="checkout-btn">
-        Go to Checkout
-      </button>
-    </div>
-
-    <!-- Checkout Area -->
-    <div v-if="showCheckoutPopup && !showUserForm" class="checkout-area">
-      <h2>Checkout</h2>
-      <div v-for="(item, index) in cart" :key="index" class="cart-item">
-        <h3>{{ item.subject }}</h3>
-        <img :src="item.imagePath" :alt="item.imageAlt" class="cart-image" />
-        <p><strong>Price:</strong> ${{ item.price }}</p>
-        <p><strong>Quantity:</strong> 
-          <input type="number" v-model.number="item.quantity" min="1" :max="item.stock" @change="updateCart(index)" />
-        </p>
-        <p><strong>Subtotal:</strong> ${{ (item.price * item.quantity).toFixed(2) }}</p>
-        <div class="cart-buttons">
-          <button @click="removeFromCart(item, item.quantity)">Remove</button>
-        </div>
-      </div>
-
-      <p><strong>Total Price:</strong> ${{ totalPrice.toFixed(2) }}</p>
-      <button @click="goBackToProducts" class="back-btn">Back to Products</button>
-      <button @click="showUserFormPopup" class="finalize-btn">
-        Finalize Order
-      </button>
-    </div>
-
-    <!-- User Form Pop-up -->
-    <div v-if="showUserForm" class="user-form-overlay">
-      <div class="user-form-container">
-        <h2>Enter Your Details</h2>
-        <form @submit.prevent="finalizeOrder">
-          <label for="name">Name</label>
-          <input type="text" id="name" v-model="user.name" required />
-
-          <label for="email">Email</label>
-          <input type="email" id="email" v-model="user.email" required />
-
-          <label for="address">Address</label>
-          <input type="text" id="address" v-model="user.address" required />
-
-          <button type="submit">Submit Order</button>
-        </form>
-        <button @click="closeUserFormPopup" class="back-btn">Back to Cart</button>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script>
 export default {
   data() {
     return {
       products: [],
       cart: [],
-      user: { name: '', email: '', address: '' },
+      user: { name: '', phone: '', email: '', address: '' },
       searchQuery: '',
       sortOption: '',
       showCheckoutPopup: false,
       showProductList: true,
-      showUserForm: false // Show the user form as a pop-up
+      showUserForm: false
     };
   },
-  created() {
+  mounted() {
     this.fetchProducts();
   },
   methods: {
     async fetchProducts() {
   try {
     const response = await fetch('https://fullstack-express-9dbh.onrender.com/api/lessons');
-    this.products = await response.json();
+    if (!response.ok) {
+      throw new Error('Failed to fetch lessons');
+    }
+    const data = await response.json();
+    console.log('Lessons fetched:', data); // Log data to check
+    this.products = data;
   } catch (error) {
     console.error('Error fetching products:', error);
+    alert('Error fetching products');
   }
-  },
+},
     addToCart(product) {
       const existing = this.cart.find(item => item._id === product._id);
       if (existing) {
@@ -127,8 +38,20 @@ export default {
         this.cart.push({ ...product, quantity: 1 });
       }
       product.stock--;
+      this.updateProductStock(product);
     },
-    async removeFromCart(product, quantity) {
+    async updateProductStock(product) {
+      try {
+        await fetch(`https://fullstack-express-9dbh.onrender.com/api/lessons/${product._id}/update-stock`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quantity: -1 })
+        });
+      } catch (error) {
+        console.error(`Error updating stock for ${product.subject}:`, error);
+      }
+    },
+    removeFromCart(product, quantity = 1) {
       const index = this.cart.findIndex(item => item._id === product._id);
       if (index >= 0) {
         const cartItem = this.cart[index];
@@ -138,16 +61,7 @@ export default {
           this.cart.splice(index, 1);
         }
         product.stock += quantity;
-
-        try {
-          await fetch('https://fullstack-express-9dbh.onrender.com/api/cart/remove', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ lessonId: product._id, quantity })
-          });
-        } catch (error) {
-          console.error('Error updating stock:', error);
-        }
+        this.updateProductStock(product);
       }
     },
     goToCheckout() {
@@ -159,57 +73,57 @@ export default {
       this.showCheckoutPopup = false;
     },
     showUserFormPopup() {
-      this.showUserForm = true; // Show the user form in a pop-up
+      this.showUserForm = true;
     },
     closeUserFormPopup() {
-      this.showUserForm = false; // Close the user form pop-up and go back to the cart
+      this.showUserForm = false;
     },
     async finalizeOrder() {
-  try {
-    const lessonIDs = this.cart.map(item => item._id);
-    const numberOfSpaces = this.cart.map(item => item.quantity);
-    const order = {
-      name: this.user.name,
-      phoneNumber: this.user.phoneNumber,
-      lessonIDs,
-      numberOfSpaces
-    };
+      const lessonIDs = this.cart.map(item => item._id);
+      const numberOfSpaces = this.cart.map(item => item.quantity);
+      const order = {
+        name: this.user.name,
+        phoneNumber: this.user.phone,
+        email: this.user.email,
+        address: this.user.address,
+        lessonIDs,
+        numberOfSpaces
+      };
 
-    const response = await fetch('https://fullstack-express-9dbh.onrender.com/api/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(order)
-    });
+      try {
+        const response = await fetch('https://fullstack-express-9dbh.onrender.com/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(order)
+        });
 
-    if (response.ok) {
-      this.cart = [];
-      this.user = { name: '', phoneNumber: '' };
-      this.fetchProducts();
-      alert('Order placed successfully!');
-    } else {
-      alert('Failed to place the order');
-    }
-  } catch (error) {
-    console.error('Error finalizing order:', error);
-  }
-},
-    async updateStock() {
-      for (const item of this.cart) {
-        try {
-          await fetch(`https://fullstack-express-9dbh.onrender.com/api/lessons/${item._id}/update-stock`, {
-            method: 'PATCH',
+        if (response.ok) {
+          // Save the user to the users collection
+          await fetch('https://fullstack-express-9dbh.onrender.com/api/users', {
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ quantity: item.quantity })
+            body: JSON.stringify({ name: this.user.name, phoneNumber: this.user.phone })
           });
-        } catch (error) {
-          console.error(`Error updating stock for ${item.subject}:`, error);
+          
+          // Clear cart and refresh products
+          this.cart = [];
+          this.user = { name: '', phone: '', email: '', address: '' };
+          this.fetchProducts();
+          alert('Order placed successfully!');
+        } else {
+          alert('Failed to place the order');
         }
+      } catch (error) {
+        console.error('Error finalizing order:', error);
       }
-      await this.fetchProducts();
     },
-    // Method to check if product is in cart
     isInCart(product) {
       return this.cart.some(item => item._id === product._id);
+    },
+    isFormValid() {
+      const nameRegex = /^[A-Za-z]+$/;
+      const phoneRegex = /^[0-9]+$/;
+      return nameRegex.test(this.user.name) && phoneRegex.test(this.user.phone);
     }
   },
   computed: {
@@ -220,18 +134,23 @@ export default {
       return this.cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
     },
     sortedAndFilteredProducts() {
-      let filtered = this.products.filter(p => p.subject.toLowerCase().includes(this.searchQuery.toLowerCase()));
-
-      if (this.sortOption === 'subject') {
-        filtered = filtered.sort((a, b) => a.subject.localeCompare(b.subject));
-      } else if (this.sortOption === 'location') {
-        filtered = filtered.sort((a, b) => a.location.localeCompare(b.location));
-      } else if (this.sortOption === 'priceAsc') {
-        filtered = filtered.sort((a, b) => a.price - b.price);
-      } else if (this.sortOption === 'stockAsc') {
-        filtered = filtered.sort((a, b) => a.stock - b.stock);
+      let filtered = this.products.filter(product =>
+        product.subject.toLowerCase().includes(this.searchQuery.toLowerCase())
+      );
+      switch (this.sortOption) {
+        case 'subject':
+          filtered.sort((a, b) => a.subject.localeCompare(b.subject));
+          break;
+        case 'location':
+          filtered.sort((a, b) => a.location.localeCompare(b.location));
+          break;
+        case 'priceAsc':
+          filtered.sort((a, b) => a.price - b.price);
+          break;
+        case 'stockAsc':
+          filtered.sort((a, b) => a.stock - b.stock);
+          break;
       }
-      
       return filtered;
     }
   }
