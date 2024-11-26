@@ -160,54 +160,61 @@ export default {
       this.showUserForm = false;
     },
     async finalizeOrder() {
-      const order = {
-        name: this.user.name,
-        phoneNumber: this.user.phone,
-        email: this.user.email,
-        address: this.user.address,
-        lessonIDs: this.cart.map(item => item._id),
-        numberOfSpaces: this.cart.map(item => item.quantity)
-      };
+  const order = {
+    name: this.user.name,
+    phoneNumber: this.user.phone,
+    email: this.user.email,
+    address: this.user.address,
+    lessonIDs: this.cart.map(item => item._id),
+    numberOfSpaces: this.cart.map(item => item.quantity)
+  };
 
-      try {
-        // Submit user details to users collection
-        const userResponse = await fetch('https://fullstack-express-9dbh.onrender.com/api/users', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(this.user)
-        });
+  try {
+    // Step 1: Submit user details to the 'users' collection (POST request)
+    const userResponse = await fetch('https://fullstack-express-9dbh.onrender.com/api/users', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json' 
+      },
+      body: JSON.stringify(this.user) // Send the user object as JSON
+    });
 
-        if (!userResponse.ok) {
-          const errorText = await userResponse.text();
-          throw new Error(`Failed to submit user details. Response: ${errorText}`);
-        }
+    // Step 2: Handle response for user creation
+    if (!userResponse.ok) {
+      const errorText = await userResponse.text();
+      throw new Error(`Failed to submit user details. Response: ${errorText}`);
+    }
 
-        // Proceed with order submission if user creation is successful
-        const orderResponse = await fetch('https://fullstack-express-9dbh.onrender.com/api/orders', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(order)
-        });
+    // Step 3: Proceed with order submission if user creation is successful
+    const orderResponse = await fetch('https://fullstack-express-9dbh.onrender.com/api/orders', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json' 
+      },
+      body: JSON.stringify(order) // Send the order object as JSON
+    });
 
-        if (!orderResponse.ok) {
-          throw new Error('Failed to submit order.');
-        }
+    // Step 4: Handle response for order creation
+    if (!orderResponse.ok) {
+      const errorText = await orderResponse.text();
+      throw new Error(`Failed to submit order. Response: ${errorText}`);
+    }
 
-        // Handle stock update
-        await this.updateStock();
+    // Step 5: Update stock after successful order submission
+    await this.updateStock();
 
-        // Clear cart and reset user data
-        this.cart = [];
-        this.user = { name: '', phone: '', email: '', address: '' };
-        alert('Order placed successfully!');
+    // Step 6: Clear cart and reset user data after successful order
+    this.cart = [];
+    this.user = { name: '', phone: '', email: '', address: '' };
+    alert('Order placed successfully!');
 
-        // Go back to products view
-        this.goBackToProducts();
-      } catch (error) {
-        console.error('Error finalizing order:', error);
-        alert(`Failed to finalize order: ${error.message}`);
-      }
-    },
+    // Step 7: Go back to the products view
+    this.goBackToProducts();
+  } catch (error) {
+    console.error('Error finalizing order:', error);
+    alert(`Failed to finalize order: ${error.message}`);
+  }
+},
     async updateStock() {
       const stockUpdatePromises = this.cart.map(async (item) => {
         const updatedProduct = { ...item, stock: item.stock - item.quantity };
