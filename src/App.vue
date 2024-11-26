@@ -23,11 +23,14 @@
       </select>
     </div>
 
-    <div v-if="products.length === 0" class="no-products">
+    <div v-if="isLoading" class="loading">
+      <p>Loading lessons...</p>
+    </div>
+    <div v-else-if="products.length === 0" class="no-products">
       <p>No lessons available at the moment.</p>
     </div>
 
-    <div v-if="showProductList" class="product-list">
+    <div v-if="showProductList && products.length > 0" class="product-list">
       <h2>Products</h2>
       <div v-for="product in sortedAndFilteredProducts" :key="product._id" class="product">
         <h3>{{ product.subject }}</h3>
@@ -87,7 +90,7 @@
           <label for="address">Address</label>
           <input type="text" id="address" v-model="user.address" required />
           <button type="submit" :disabled="!isFormValid">Submit Order</button>
-          <button @click="closeUserFormPopup">Cancel</button>
+          <button type="button" @click="closeUserFormPopup">Cancel</button>
         </form>
       </div>
     </div>
@@ -105,7 +108,8 @@ export default {
       sortOption: '',
       showCheckoutPopup: false,
       showProductList: true,
-      showUserForm: false
+      showUserForm: false,
+      isLoading: true
     };
   },
   mounted() {
@@ -113,62 +117,32 @@ export default {
   },
   methods: {
     async fetchProducts() {
-  try {
-    // Fetch lessons from the API
-    const response = await fetch('https://fullstack-express-9dbh.onrender.com/api/lessons');
-    
-    // Check if response is OK
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    // Parse JSON
-    const data = await response.json();
-
-    // Check if data is valid
-    if (!Array.isArray(data)) {
-      throw new Error('Invalid response format: expected an array');
-    }
-
-    console.log('Lessons fetched successfully:', data);
-    this.products = data;
-  } catch (error) {
-    console.error('Error fetching lessons:', error.message);
-    alert(`Error fetching lessons: ${error.message}`);
-  }
-},
+      this.isLoading = true;
+      try {
+        const response = await fetch('https://fullstack-express-9dbh.onrender.com/api/lessons');
+        if (!response.ok) throw new Error(`Error ${response.status}: Unable to fetch products.`);
+        const data = await response.json();
+        this.products = Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error('Error fetching products:', error);
+        alert('Failed to load products. Please try again.');
+      } finally {
+        this.isLoading = false;
+      }
+    },
     addToCart(product) {
       const existing = this.cart.find(item => item._id === product._id);
-      if (existing) {
-        existing.quantity++;
-      } else {
-        this.cart.push({ ...product, quantity: 1 });
-      }
+      if (existing) existing.quantity++;
+      else this.cart.push({ ...product, quantity: 1 });
       product.stock--;
-      this.updateProductStock(product);
-    },
-    async updateProductStock(product) {
-      try {
-        await fetch(`https://fullstack-express-9dbh.onrender.com/api/lessons/${product._id}/update-stock`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ quantity: -1 })
-        });
-      } catch (error) {
-        console.error(`Error updating stock for ${product.subject}:`, error);
-      }
     },
     removeFromCart(product, quantity = 1) {
       const index = this.cart.findIndex(item => item._id === product._id);
       if (index >= 0) {
         const cartItem = this.cart[index];
-        if (cartItem.quantity > quantity) {
-          cartItem.quantity -= quantity;
-        } else {
-          this.cart.splice(index, 1);
-        }
+        cartItem.quantity -= quantity;
+        if (cartItem.quantity <= 0) this.cart.splice(index, 1);
         product.stock += quantity;
-        this.updateProductStock(product);
       }
     },
     goToCheckout() {
@@ -185,75 +159,73 @@ export default {
     closeUserFormPopup() {
       this.showUserForm = false;
     },
-    methods: {
-  async finalizeOrder() {
-    const lessonIDs = this.cart.map(item => item._id);
-    const numberOfSpaces = this.cart.map(item => item.quantity);
-    const order = {
-      name: this.user.name,
-      phoneNumber: this.user.phone,
-      email: this.user.email,
-      address: this.user.address,
-      lessonIDs,
-      numberOfSpaces
-    };
+    async finalizeOrder() {
+      const order = {
+        name: this.user.name,
+        phoneNumber: this.user.phone,
+        email: this.user.email,
+        address: this.user.address,
+        lessonIDs: this.cart.map(item => item._id),
+        numberOfSpaces: this.cart.map(item => item.quantity)
+      };
 
-    try {
-      // Save order details to the orders collection
-      const orderResponse = await fetch('https://fullstack-express-9dbh.onrender.com/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(order)
-      });
-
-      if (orderResponse.ok) {
-        // Save user details to the users collection
+      try {
+        // Submit user details to users collection
         const userResponse = await fetch('https://fullstack-express-9dbh.onrender.com/api/users', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: this.user.name, phoneNumber: this.user.phone })
+          body: JSON.stringify(this.user)
         });
 
         if (!userResponse.ok) {
-          console.error('Failed to save user details.');
-          alert('Failed to save user details.');
-          return;
+          const errorText = await userResponse.text();
+          throw new Error(`Failed to submit user details. Response: ${errorText}`);
         }
 
-        // Update stock for each lesson in MongoDB
-        const stockUpdates = this.cart.map(item => 
-          fetch(`https://fullstack-express-9dbh.onrender.com/api/lessons/${item._id}/update-stock`, {
-            method: 'PATCH',
+        // Proceed with order submission if user creation is successful
+        const orderResponse = await fetch('https://fullstack-express-9dbh.onrender.com/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(order)
+        });
+
+        if (!orderResponse.ok) {
+          throw new Error('Failed to submit order.');
+        }
+
+        // Update stock by subtracting the purchased quantity from each product
+        const stockUpdatePromises = this.cart.map(async (item) => {
+          const updatedProduct = { ...item, stock: item.stock - item.quantity };
+          const productResponse = await fetch(`https://fullstack-express-9dbh.onrender.com/api/lessons/${item._id}`, {
+            method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ quantity: -item.quantity })
-          })
-        );
+            body: JSON.stringify(updatedProduct)
+          });
+          if (!productResponse.ok) {
+            throw new Error(`Failed to update stock for product ${item.subject}`);
+          }
+        });
 
-        await Promise.all(stockUpdates);
+        await Promise.all(stockUpdatePromises);
 
-        // Clear cart, reset user details, and fetch updated products
+        // Clear cart and reset user data
         this.cart = [];
         this.user = { name: '', phone: '', email: '', address: '' };
-        await this.fetchProducts();
+        alert('Order placed successfully!');
 
-        // Display success message and redirect to product page
-        alert('Purchase completed successfully!');
+        // Go back to products view
         this.goBackToProducts();
-      } else {
-        alert('Failed to place the order.');
+      } catch (error) {
+        console.error('Error finalizing order:', error);
+        alert(`Failed to finalize order: ${error.message}`);
       }
-    } catch (error) {
-      console.error('Error finalizing order:', error);
-      alert('An error occurred while completing your purchase.');
-    }
-  },
-},
+    },
     isInCart(product) {
       return this.cart.some(item => item._id === product._id);
     },
     isFormValid() {
-      const nameRegex = /^[A-Za-z]+$/;
-      const phoneRegex = /^[0-9]+$/;
+      const nameRegex = /^[A-Za-z\s'-]+$/;
+      const phoneRegex = /^[+]?[\d\s()-]+$/;
       return nameRegex.test(this.user.name) && phoneRegex.test(this.user.phone);
     }
   },
@@ -268,19 +240,14 @@ export default {
       let filtered = this.products.filter(product =>
         product.subject.toLowerCase().includes(this.searchQuery.toLowerCase())
       );
-      switch (this.sortOption) {
-        case 'subject':
-          filtered.sort((a, b) => a.subject.localeCompare(b.subject));
-          break;
-        case 'location':
-          filtered.sort((a, b) => a.location.localeCompare(b.location));
-          break;
-        case 'priceAsc':
-          filtered.sort((a, b) => a.price - b.price);
-          break;
-        case 'stockAsc':
-          filtered.sort((a, b) => a.stock - b.stock);
-          break;
+      if (this.sortOption === 'subject') {
+        filtered.sort((a, b) => a.subject.localeCompare(b.subject));
+      } else if (this.sortOption === 'location') {
+        filtered.sort((a, b) => a.location.localeCompare(b.location));
+      } else if (this.sortOption === 'priceAsc') {
+        filtered.sort((a, b) => a.price - b.price);
+      } else if (this.sortOption === 'stockAsc') {
+        filtered.sort((a, b) => a.stock - b.stock);
       }
       return filtered;
     }
@@ -385,7 +352,5 @@ input[type="text"], input[type="email"], input[type="number"] {
   border: 1px solid #ccc;
 }
 </style>
-
-
 
 
