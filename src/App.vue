@@ -113,7 +113,7 @@ export default {
     };
   },
   mounted() {
-    this.fetchProducts();
+    this.fetchProducts(); // Fetch lessons on component mount
   },
   methods: {
     async fetchProducts() {
@@ -193,20 +193,8 @@ export default {
           throw new Error('Failed to submit order.');
         }
 
-        // Update stock by subtracting the purchased quantity from each product
-        const stockUpdatePromises = this.cart.map(async (item) => {
-          const updatedProduct = { ...item, stock: item.stock - item.quantity };
-          const productResponse = await fetch(`https://fullstack-express-9dbh.onrender.com/api/lessons/${item._id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(updatedProduct)
-          });
-          if (!productResponse.ok) {
-            throw new Error(`Failed to update stock for product ${item.subject}`);
-          }
-        });
-
-        await Promise.all(stockUpdatePromises);
+        // Handle stock update
+        await this.updateStock();
 
         // Clear cart and reset user data
         this.cart = [];
@@ -219,6 +207,21 @@ export default {
         console.error('Error finalizing order:', error);
         alert(`Failed to finalize order: ${error.message}`);
       }
+    },
+    async updateStock() {
+      const stockUpdatePromises = this.cart.map(async (item) => {
+        const updatedProduct = { ...item, stock: item.stock - item.quantity };
+        const productResponse = await fetch(`https://fullstack-express-9dbh.onrender.com/api/lessons/${item._id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedProduct)
+        });
+        if (!productResponse.ok) {
+          throw new Error(`Failed to update stock for product ${item.subject}`);
+        }
+      });
+
+      await Promise.all(stockUpdatePromises);
     },
     isInCart(product) {
       return this.cart.some(item => item._id === product._id);
@@ -352,5 +355,3 @@ input[type="text"], input[type="email"], input[type="number"] {
   border: 1px solid #ccc;
 }
 </style>
-
-
